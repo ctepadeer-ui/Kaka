@@ -1,0 +1,548 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Піксель-батл</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+/* Layout: canvas board on the left, admin and team list on the right at wide widths; stacked on phones. */
+:root{
+  --bg:#F2F3F8; --surface:#FFFFFF; --surface-2:#E8EBF3; --fg:#161A26; --muted:#586074; --line:#D6DAE6;
+  --accent:#087F7A; --on-accent:#FFFFFF; --live:#1B8F4E; --canvas:#98A1B3;
+  --font-display:'Pixelify Sans','Inter',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12141B; --surface:#1B1E29; --surface-2:#262A38; --fg:#ECEEF6; --muted:#9BA2B7; --line:#2D3242;
+    --accent:#3CCFC8; --on-accent:#06211F; --live:#4CD083; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12141B; --surface:#1B1E29; --surface-2:#262A38; --fg:#ECEEF6; --muted:#9BA2B7; --line:#2D3242;
+  --accent:#3CCFC8; --on-accent:#06211F; --live:#4CD083; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--font-body); font-size:15px; line-height:1.45;
+  padding-block:16px 28px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+button,select{font-family:inherit;font-size:inherit;color:inherit}
+button:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto}
+
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-bottom:14px}
+h1{font-family:var(--font-display);font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:.01em;text-wrap:balance}
+.sub{margin:4px 0 0;color:var(--muted);font-size:14px;max-width:46ch}
+.pill{display:inline-flex;align-items:center;gap:9px;padding:7px 13px;border:1px solid var(--line);background:var(--surface);border-radius:999px;font-weight:600;font-size:14px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.pill.live .dot{background:var(--live);animation:pulse 1.4s ease-in-out infinite}
+.timer{font-family:var(--font-display);font-size:19px;font-variant-numeric:tabular-nums;line-height:1}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.pill.live .dot{animation:none}.bar span,.place .fill{transition:none!important}}
+
+.conn{margin:0 0 12px;padding:9px 12px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-size:14px;color:var(--muted)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.panel h2{font-family:var(--font-display);font-weight:700;font-size:21px;margin:0 0 10px}
+
+.admin{margin-bottom:14px}
+.admin summary{cursor:pointer;font-weight:700;font-family:var(--font-display);font-size:18px;list-style-position:inside}
+.adm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px;align-items:end}
+.adm-grid label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);font-weight:500}
+.adm-grid select{height:42px;border-radius:8px;border:1px solid var(--line);background:var(--bg);padding:0 10px;color:var(--fg)}
+.hint{margin:10px 0 0;color:var(--muted);font-size:13px}
+.btn{height:42px;padding:0 14px;border-radius:8px;border:0;background:var(--accent);color:var(--on-accent);font-weight:700;cursor:pointer}
+.btn.ghost{background:var(--surface-2);color:var(--fg)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+.app{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){
+  .app{grid-template-columns:minmax(0,1fr) 370px;align-items:start}
+  .side{position:sticky;top:12px}
+}
+.board,.side{min-width:0}
+
+.view{position:relative;width:100%;aspect-ratio:1/1;background:var(--canvas);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+.view:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{position:absolute;left:0;top:0}
+.stage canvas{display:block;image-rendering:pixelated}
+.grid{position:absolute;left:0;top:0;pointer-events:none;display:none;
+  background-image:linear-gradient(to right,rgba(0,0,0,.16) 1px,transparent 1px),linear-gradient(to bottom,rgba(0,0,0,.16) 1px,transparent 1px)}
+.grid.on{display:block}
+.sel{position:absolute;pointer-events:none;border:2px solid #fff;box-shadow:0 0 0 1px #000,inset 0 0 0 1px #000;display:none}
+.zoom{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:38px;height:38px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:20px;line-height:1;cursor:pointer}
+.veil{position:absolute;left:10px;right:58px;bottom:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:14px;pointer-events:none}
+
+.info{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-height:30px;margin:10px 0 2px;font-size:14px;color:var(--muted)}
+.coord{font-family:var(--font-display);font-size:16px;color:var(--fg);font-variant-numeric:tabular-nums}
+.chip{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--line);vertical-align:-2px}
+.action{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.swatches{display:flex;gap:8px;align-items:center}
+.sw{width:46px;height:46px;border-radius:8px;border:2px solid var(--line);cursor:pointer;padding:0}
+.sw[aria-pressed="true"]{border-color:var(--fg);box-shadow:inset 0 0 0 2px var(--surface)}
+.place{flex:1 1 190px;height:46px;border-radius:8px;border:0;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:15px;cursor:pointer;position:relative;overflow:hidden}
+.place[disabled]{background:var(--surface-2);color:var(--muted);cursor:not-allowed}
+.place .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(0,0,0,.16);transition:width .5s linear}
+.place span.l{position:relative}
+.mine-line{margin:10px 0 0;color:var(--muted);font-size:13px}
+.help{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+ul.teams{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+li.team{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;gap:5px 10px;align-items:center;padding:8px;border:1px solid transparent;border-radius:8px}
+li.team.mine{border-color:var(--accent);background:var(--surface-2)}
+.flag{display:flex;flex-direction:column;width:34px;height:24px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.flag i{flex:1}
+.tname{font-weight:600;overflow-wrap:anywhere}
+.tsub{color:var(--muted);font-size:12.5px}
+.score{text-align:right;min-width:46px}
+.score .n{display:block;font-family:var(--font-display);font-size:19px;line-height:1.05;font-variant-numeric:tabular-nums}
+.score .pct{display:block;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;min-height:14px}
+.join{padding:8px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+.join[disabled]{opacity:.55;cursor:not-allowed}
+.bar{grid-column:1/-1;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+.bar span{display:block;height:100%;width:0;transition:width .3s}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom, 0px));max-width:min(92vw,420px);padding:10px 14px;background:var(--fg);color:var(--bg);border-radius:8px;font-size:14px;z-index:20;text-align:center}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Піксель-батл</h1>
+      <p class="sub">Команди-країни б’ються за спільне полотно. Фарбуйте клітинки кольорами свого прапора.</p>
+    </div>
+    <button class="btn ghost" id="authBtn" type="button">Увійти</button>
+    <div class="pill" id="pill"><span class="dot"></span><span id="pillText">Очікування старту</span><span class="timer" id="timer" hidden>0:00</span></div>
+  </header>
+
+  <div class="conn" id="conn" role="status" hidden></div>
+
+  <details class="panel admin" id="admin" hidden>
+    <summary>Керування івентом</summary>
+    <div class="adm-grid">
+      <label for="dur">Тривалість
+        <select id="dur">
+          <option value="10">10 хвилин</option>
+          <option value="30" selected>30 хвилин</option>
+          <option value="60">1 година</option>
+          <option value="120">2 години</option>
+          <option value="360">6 годин</option>
+          <option value="1440">24 години</option>
+        </select>
+      </label>
+      <label for="cd">Пауза між пікселями
+        <select id="cd">
+          <option value="2">2 секунди</option>
+          <option value="5" selected>5 секунд</option>
+          <option value="10">10 секунд</option>
+          <option value="30">30 секунд</option>
+          <option value="60">1 хвилина</option>
+        </select>
+      </label>
+      <button class="btn" id="start" type="button">Запустити івент</button>
+      <button class="btn ghost" id="stop" type="button">Зупинити</button>
+    </div>
+    <p class="hint">Новий запуск очищає полотно й скидає рахунок. Адміністратор визначається записом у таблиці admins. Учасники входять через посилання на пошті.</p>
+  </details>
+
+  <div class="app">
+    <section class="board">
+      <div class="view" id="view" tabindex="0" aria-label="Полотно 48 на 48 клітинок. Стрілки рухають вибір, Enter ставить піксель.">
+        <div class="stage" id="stage"><canvas id="cv"></canvas><div class="grid" id="grid"></div><div class="sel" id="sel"></div></div>
+        <div class="zoom" id="zoom">
+          <button type="button" id="zin" aria-label="Збільшити">+</button>
+          <button type="button" id="zout" aria-label="Зменшити">−</button>
+          <button type="button" id="zfit" aria-label="Вписати полотно">⤢</button>
+        </div>
+        <div class="veil" id="veil" hidden></div>
+      </div>
+      <div class="info" id="info"></div>
+      <div class="action">
+        <div class="swatches" id="swatches" hidden></div>
+        <button class="place" id="place" type="button" disabled><span class="fill" id="fill"></span><span class="l" id="placeLabel">Чекаємо старт</span></button>
+      </div>
+      <p class="mine-line" id="mineLine"></p>
+      <p class="help">Торкніться клітинки, щоб вибрати її. Тягніть полотно, щоб пересунути, щипок або +/− міняють масштаб.</p>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <h2>Команди</h2>
+        <ul class="teams" id="teams"></ul>
+        <p class="hint" id="teamHint"></p>
+      </section>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+'use strict';
+var N=48;
+var TEAMS=[
+  {id:'ua',name:'Україна',m:0,c:['#2F6FDE','#FFD83D','#123A82']},
+  {id:'pl',name:'Польща',m:0,c:['#E8374F','#F4F1F0','#8C1C30']},
+  {id:'de',name:'Німеччина',m:1,c:['#1E1E22','#E03A3A','#F2B900']},
+  {id:'it',name:'Італія',m:0,c:['#1E9E5A','#F3F2EC','#D13A44']},
+  {id:'nl',name:'Нідерланди',m:0,c:['#F26B21','#F3F3F6','#2A4A9A']},
+  {id:'fr',name:'Франція',m:0,c:['#2B3FA6','#ECEDF5','#EE4B5B']},
+  {id:'br',name:'Бразилія',m:0,c:['#18A046','#F5CF1B','#1E5AA8']},
+  {id:'tr',name:'Туреччина',m:0,c:['#D6232F','#F6F6F6','#7B1219']},
+  {id:'jp',name:'Японія',m:1,c:['#F2F2F2','#BC002D','#2B2F3A']},
+  {id:'ie',name:'Ірландія',m:0,c:['#169B62','#F4F4F0','#FF883E']}
+];
+var TB={}; TEAMS.forEach(function(t){TB[t.id]=t;});
+var $=function(id){return document.getElementById(id);};
+
+var sb=null,session=null,uid=null,isAdmin=false;
+var SUPABASE_URL='https://wezcwwumvntdlfjcwize.supabase.co';
+var SUPABASE_ANON_KEY='sb_publishable_zD8QqOmR8rZqIsTPML-vvw_QkpRxkfj';
+var ev={status:'idle',epoch:0,endsAt:0,cooldown:5};
+var members=new Map(), pix=new Map();
+var myTeam=null, selX=-1, selY=-1, selColor=0, placing=false;
+var counts={}, total=0, mine=0, lastPhase='idle', armed=false, armTimer=0, connTimer=0;
+var lastAt=0; try{lastAt=Number(localStorage.getItem('pb_last'))||0;}catch(e){}
+
+var view=$('view'), stage=$('stage'), cv=$('cv'), grid=$('grid'), sel=$('sel'), ctx=cv.getContext('2d');
+cv.width=N; cv.height=N;
+var s=8, tx=0, ty=0, fit=8, zoomed=false;
+
+function pl(n,a,b,c){var m=n%100,k=n%10;if(m>10&&m<20)return c;if(k===1)return a;if(k>1&&k<5)return b;return c;}
+function pad(n){return (n<10?'0':'')+n;}
+function fmt(ms){ms=Math.max(0,ms);var t=Math.ceil(ms/1000),h=Math.floor(t/3600),m=Math.floor(t%3600/60),r=t%60;return (h?h+':'+pad(m):String(m))+':'+pad(r);}
+function phase(){
+  if(ev.status==='running') return Date.now()<ev.endsAt?'running':'ended';
+  return ev.status==='ended'?'ended':'idle';
+}
+function valid(d){
+  return !!d&&Number.isInteger(d.x)&&Number.isInteger(d.y)&&d.x>=0&&d.y>=0&&d.x<N&&d.y<N&&!!TB[d.t]&&Number.isInteger(d.c)&&d.c>=0&&d.c<3;
+}
+function toast(m){var t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){t.hidden=true;},3200);}
+function dbMsg(e){
+  var c=e&&e.code;
+  if(c==='42501'||c==='PGRST301') return 'Немає прав на цю дію. Перевірте SQL-політики Supabase.';
+  if(c==='23514'||c==='P0001') return (e&&e.message)||'Дію відхилено: перевірте команду, івент або час між пікселями.';
+  if(c==='resource_exhausted') return 'Забагато запитів. Зачекайте секунду.';
+  if(c==='quota_exceeded') return 'Сховище гри заповнене.';
+  if(c==='revoked') return 'Доступ до гри втрачено.';
+  return 'Не вийшло. Спробуйте ще раз.';
+}
+
+/* ---------- canvas ---------- */
+function drawPix(d){ if(!valid(d)||d.e!==ev.epoch) return; ctx.fillStyle=TB[d.t].c[d.c]; ctx.fillRect(d.x,d.y,1,1); }
+function redrawAll(){ ctx.clearRect(0,0,N,N); pix.forEach(drawPix); }
+
+/* ---------- viewport ---------- */
+function clamp(){
+  var w=view.clientWidth,h=view.clientHeight,cw=N*s;
+  tx=cw<=w?(w-cw)/2:Math.min(0,Math.max(w-cw,tx));
+  ty=cw<=h?(h-cw)/2:Math.min(0,Math.max(h-cw,ty));
+}
+function placeSel(){
+  if(selX<0){sel.style.display='none';return;}
+  sel.style.display='block';
+  sel.style.left=selX*s+'px'; sel.style.top=selY*s+'px'; sel.style.width=s+'px'; sel.style.height=s+'px';
+}
+function apply(){
+  var w=N*s;
+  cv.style.width=w+'px'; cv.style.height=w+'px';
+  grid.style.width=w+'px'; grid.style.height=w+'px'; grid.style.backgroundSize=s+'px '+s+'px';
+  grid.classList.toggle('on',s>=9);
+  stage.style.transform='translate('+tx+'px,'+ty+'px)';
+  placeSel();
+}
+function layout(){
+  var w=view.clientWidth; if(!w) return;
+  fit=w/N;
+  s=zoomed?Math.max(s,fit):fit;
+  clamp(); apply();
+}
+function zoomAt(cx,cy,f){
+  var r=view.getBoundingClientRect(),px=cx-r.left,py=cy-r.top;
+  var wx=(px-tx)/s,wy=(py-ty)/s;
+  s=Math.min(48,Math.max(fit,s*f));
+  zoomed=s>fit*1.001;
+  tx=px-wx*s; ty=py-wy*s;
+  clamp(); apply();
+}
+function pick(cx,cy){
+  var r=view.getBoundingClientRect();
+  var x=Math.floor((cx-r.left-tx)/s),y=Math.floor((cy-r.top-ty)/s);
+  if(x<0||y<0||x>=N||y>=N) return;
+  selX=x; selY=y; placeSel(); renderInfo(); renderPlace();
+  try{view.focus({preventScroll:true});}catch(e){}
+}
+function reveal(){
+  var w=view.clientWidth,h=view.clientHeight,x0=tx+selX*s,y0=ty+selY*s;
+  if(x0<0)tx-=x0; else if(x0+s>w)tx-=x0+s-w;
+  if(y0<0)ty-=y0; else if(y0+s>h)ty-=y0+s-h;
+  clamp();
+}
+var ptrs=new Map(), drag=null, pinch=null, moved=false;
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+view.addEventListener('pointerdown',function(e){
+  try{view.setPointerCapture(e.pointerId);}catch(x){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===1){drag={x:e.clientX,y:e.clientY,tx:tx,ty:ty};moved=false;}
+  else if(ptrs.size===2){
+    var p=Array.from(ptrs.values());
+    pinch={d:dist(p[0],p[1])||1,s:s,cx:(p[0].x+p[1].x)/2,cy:(p[0].y+p[1].y)/2,tx:tx,ty:ty};
+    drag=null; moved=true;
+  }
+});
+view.addEventListener('pointermove',function(e){
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size>=2){
+    var p=Array.from(ptrs.values()),r=view.getBoundingClientRect();
+    var ns=Math.min(48,Math.max(fit,pinch.s*dist(p[0],p[1])/pinch.d));
+    var wx=(pinch.cx-r.left-pinch.tx)/pinch.s,wy=(pinch.cy-r.top-pinch.ty)/pinch.s;
+    var cx=(p[0].x+p[1].x)/2-r.left,cy=(p[0].y+p[1].y)/2-r.top;
+    s=ns; zoomed=s>fit*1.001; tx=cx-wx*s; ty=cy-wy*s; clamp(); apply();
+  } else if(drag){
+    var dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+    if(!moved&&Math.hypot(dx,dy)>6) moved=true;
+    if(moved){tx=drag.tx+dx;ty=drag.ty+dy;clamp();apply();}
+  }
+});
+function endPtr(e){
+  var had=ptrs.has(e.pointerId); ptrs.delete(e.pointerId);
+  if(ptrs.size<2) pinch=null;
+  if(e.type==='pointerup'&&had&&drag&&!moved&&ptrs.size===0) pick(e.clientX,e.clientY);
+  if(ptrs.size===0) drag=null;
+  else if(ptrs.size===1){var p=Array.from(ptrs.values())[0];drag={x:p.x,y:p.y,tx:tx,ty:ty};moved=true;}
+}
+view.addEventListener('pointerup',endPtr);
+view.addEventListener('pointercancel',endPtr);
+view.addEventListener('wheel',function(e){e.preventDefault();zoomAt(e.clientX,e.clientY,e.deltaY<0?1.2:1/1.2);},{passive:false});
+$('zoom').addEventListener('pointerdown',function(e){e.stopPropagation();});
+$('zin').addEventListener('click',function(){var r=view.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,1.5);});
+$('zout').addEventListener('click',function(){var r=view.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,1/1.5);});
+$('zfit').addEventListener('click',function(){zoomed=false;s=fit;clamp();apply();});
+view.addEventListener('keydown',function(e){
+  var k=e.key,dx=0,dy=0;
+  if(k==='ArrowLeft')dx=-1; else if(k==='ArrowRight')dx=1; else if(k==='ArrowUp')dy=-1; else if(k==='ArrowDown')dy=1;
+  else if(k==='Enter'||k===' '){e.preventDefault();place();return;} else return;
+  e.preventDefault();
+  if(selX<0){selX=N>>1;selY=N>>1;} else {selX=Math.max(0,Math.min(N-1,selX+dx));selY=Math.max(0,Math.min(N-1,selY+dy));}
+  reveal(); apply(); renderInfo(); renderPlace();
+});
+
+/* ---------- rendering ---------- */
+var rows={};
+function buildTeams(){
+  var ul=$('teams');
+  TEAMS.forEach(function(t){
+    var li=document.createElement('li'); li.className='team'; li.dataset.t=t.id;
+    var flag='<span class="flag">'+t.c.map(function(c){return '<i style="background:'+c+'"></i>';}).join('')+'</span>';
+    li.innerHTML=flag+'<div><div class="tname"></div><div class="tsub"></div></div><div class="score"><span class="n">0</span><span class="pct"></span></div><button type="button" class="join" data-t="'+t.id+'">Вступити</button><div class="bar"><span></span></div>';
+    li.querySelector('.tname').textContent=t.name;
+    li.querySelector('.bar span').style.background=t.c[t.m];
+    ul.appendChild(li); rows[t.id]=li;
+  });
+  ul.addEventListener('click',function(e){var b=e.target.closest('.join');if(b&&!b.disabled)join(b.dataset.t);});
+}
+function recount(){
+  counts={}; TEAMS.forEach(function(t){counts[t.id]=0;}); total=0; mine=0;
+  pix.forEach(function(d){
+    if(valid(d)&&d.e===ev.epoch){counts[d.t]++;total++;if(uid&&d.u===uid)mine++;}
+  });
+}
+function renderTeams(){
+  var mc={}; members.forEach(function(t){mc[t]=(mc[t]||0)+1;});
+  var order=TEAMS.slice().sort(function(a,b){return counts[b.id]-counts[a.id]||TEAMS.indexOf(a)-TEAMS.indexOf(b);});
+  var max=Math.max(1,counts[order[0].id]), ph=phase();
+  order.forEach(function(t,rank){
+    var li=rows[t.id], n=counts[t.id], mem=mc[t.id]||0, isMine=myTeam===t.id, locked=ph==='running'&&!!myTeam&&!isMine;
+    li.style.order=rank;
+    li.querySelector('.tname').textContent=(rank+1)+'. '+t.name;
+    li.classList.toggle('mine',isMine);
+    li.querySelector('.n').textContent=n;
+    li.querySelector('.pct').textContent=n>0?(n/(N*N)*100).toFixed(1)+'%':'';
+    li.querySelector('.bar span').style.width=(n/max*100)+'%';
+    li.querySelector('.tsub').textContent=mem+' '+pl(mem,'гравець','гравці','гравців');
+    var b=li.querySelector('.join');
+    b.textContent=isMine?'Ваша':'Вступити';
+    b.disabled=!sb||!uid||isMine||locked;
+    b.title=locked?'Змінити команду можна між івентами':(!uid?'Для вступу потрібен вхід в акаунт':'');
+  });
+  var h=$('teamHint');
+  if(!sb) h.textContent='Спочатку додайте URL і anon key Supabase у файл.';
+  else if(!uid) h.textContent='Увійдіть через електронну пошту, щоб приєднатися до команди.';
+  else if(!myTeam) h.textContent='Оберіть команду. Під час івенту змінити її не вийде.';
+  else h.textContent='';
+}
+function renderPalette(){
+  var box=$('swatches'); box.textContent=''; box.hidden=!myTeam;
+  if(!myTeam) return;
+  if(selColor>2) selColor=0;
+  TB[myTeam].c.forEach(function(col,i){
+    var b=document.createElement('button'); b.type='button'; b.className='sw'; b.style.background=col;
+    b.setAttribute('aria-label','Колір '+(i+1)); b.setAttribute('aria-pressed',i===selColor?'true':'false');
+    b.addEventListener('click',function(){selColor=i;renderPalette();});
+    box.appendChild(b);
+  });
+}
+function renderInfo(){
+  var i=$('info'); i.textContent='';
+  if(selX<0){i.textContent='Клітинку ще не вибрано';return;}
+  var c=document.createElement('span'); c.className='coord'; c.textContent='X '+(selX+1)+' · Y '+(selY+1); i.appendChild(c);
+  var d=pix.get(selX+'_'+selY), t=document.createElement('span');
+  if(valid(d)&&d.e===ev.epoch){
+    var chip=document.createElement('i'); chip.className='chip'; chip.style.background=TB[d.t].c[d.c];
+    t.appendChild(chip); t.appendChild(document.createTextNode(' Зайнято: '+TB[d.t].name));
+  } else t.textContent='Вільна клітинка';
+  i.appendChild(t);
+}
+function reason(){
+  if(!sb) return 'Налаштуйте Supabase';
+  var ph=phase();
+  if(ph!=='running') return ph==='ended'?'Івент завершено':'Чекаємо старт';
+  if(!uid) return 'Потрібен вхід в акаунт';
+  if(!myTeam) return 'Оберіть команду';
+  if(ev.cooldown*1000-(Date.now()-lastAt)>0) return 'Ще '+Math.ceil((ev.cooldown*1000-(Date.now()-lastAt))/1000)+' с';
+  if(selX<0) return 'Оберіть клітинку';
+  return '';
+}
+function renderPlace(){
+  var r=reason(), left=ev.cooldown*1000-(Date.now()-lastAt);
+  $('place').disabled=!!r;
+  $('placeLabel').textContent=r||'Поставити піксель';
+  $('fill').style.width=(phase()==='running'&&left>0&&uid&&myTeam)?Math.min(100,left/(ev.cooldown*1000)*100)+'%':'0%';
+  $('mineLine').textContent=(uid&&mine>0)?'Ваш внесок: '+mine+' '+pl(mine,'піксель','пікселі','пікселів'):'';
+}
+function winnerText(){
+  var best=null; TEAMS.forEach(function(t){if(counts[t.id]>0&&(!best||counts[t.id]>counts[best.id]))best=t;});
+  return best?'Перемогла команда «'+best.name+'»: '+counts[best.id]+' '+pl(counts[best.id],'піксель','пікселі','пікселів')+'.':'Ніхто не встиг поставити жодного пікселя.';
+}
+function renderStatus(){
+  var ph=phase(), pill=$('pill');
+  pill.classList.toggle('live',ph==='running');
+  $('pillText').textContent=ph==='running'?'Івент іде':ph==='ended'?'Івент завершено':'Очікування старту';
+  $('timer').hidden=ph!=='running';
+  if(ph==='running') $('timer').textContent=fmt(ev.endsAt-Date.now());
+  var v=$('veil');
+  if(ph==='ended'){v.hidden=false;v.textContent=winnerText();}
+  else if(ph==='idle'&&total===0){v.hidden=false;v.textContent=sb?'Івент ще не запущено. Оберіть команду й чекайте на старт від адміна.':'Додайте налаштування Supabase, щоб увімкнути мультиплеєр.';}
+  else v.hidden=true;
+}
+function renderAdmin(){
+  $('admin').hidden=!isAdmin;
+  var run=phase()==='running';
+  $('start').textContent=armed?'Точно? Полотно очиститься':(run?'Перезапустити':'Запустити івент');
+  $('stop').disabled=!run;
+}
+var rq=false;
+function schedule(){
+  if(rq) return; rq=true;
+  requestAnimationFrame(function(){rq=false;recount();renderTeams();renderInfo();renderStatus();renderPlace();});
+}
+function renderAll(){recount();renderTeams();renderPalette();renderInfo();renderStatus();renderPlace();renderAdmin();}
+function tick(){
+  var ph=phase();
+  if(ph!==lastPhase){lastPhase=ph;renderStatus();renderTeams();renderAdmin();}
+  else if(ph==='running') $('timer').textContent=fmt(ev.endsAt-Date.now());
+  renderPlace();
+}
+
+/* ---------- actions ---------- */
+async function place(){
+  if(placing||reason()) return;
+  placing=true;
+  try{
+    var res=await sb.rpc('place_pixel',{p_x:selX,p_y:selY,p_color:selColor});
+    if(res.error) throw res.error;
+    lastAt=Date.now(); try{localStorage.setItem('pb_last',String(lastAt));}catch(e){}
+  }catch(err){toast(dbMsg(err));}
+  placing=false; renderPlace();
+}
+$('place').addEventListener('click',place);
+async function join(code){
+  if(!sb||!uid||!TB[code]) return;
+  if(phase()==='running'&&myTeam&&myTeam!==code){toast('Змінити команду можна між івентами.');return;}
+  try{
+    var res=await sb.rpc('join_team',{p_team:code});
+    if(res.error) throw res.error;
+    myTeam=code; renderAll();
+  }catch(err){toast(dbMsg(err));}
+}
+async function startEvent(){
+  var dur=Number($('dur').value)||30, cd=Number($('cd').value)||5;
+  try{
+    var res=await sb.rpc('admin_start_event',{p_duration_minutes:dur,p_cooldown_seconds:cd});
+    if(res.error) throw res.error;
+    toast('Івент запущено');
+  }catch(err){toast(dbMsg(err));}
+}
+$('start').addEventListener('click',function(){
+  if(!sb||!isAdmin) return;
+  if(phase()==='running'&&!armed){armed=true;renderAdmin();clearTimeout(armTimer);armTimer=setTimeout(function(){armed=false;renderAdmin();},4000);return;}
+  clearTimeout(armTimer);armed=false;renderAdmin();startEvent();
+});
+$('stop').addEventListener('click',async function(){
+  if(!sb||!isAdmin||phase()!=='running') return;
+  try{var res=await sb.rpc('admin_stop_event');if(res.error)throw res.error;toast('Івент зупинено');}
+  catch(err){toast(dbMsg(err));}
+});
+
+/* ---------- Supabase ---------- */
+function showConn(m){var c=$('conn');c.textContent=m;c.hidden=!m;}
+function onErr(e){showConn('Немає зв’язку з Supabase: '+(e&&e.message?e.message:'перевірте інтернет і налаштування.'));}
+function applyEvent(d){
+  var prev=ev.epoch;d=d||{};
+  ev={status:(d.status==='running'||d.status==='ended')?d.status:'idle',epoch:Number(d.epoch)||0,endsAt:d.ends_at?new Date(d.ends_at).getTime():0,cooldown:Math.min(120,Math.max(1,Number(d.cooldown)||5))};
+  if(ev.epoch!==prev) redrawAll();lastPhase=phase();recount();renderAll();
+}
+function mapPixel(d){return {x:d.x,y:d.y,t:d.team,c:d.color,e:d.epoch,u:d.user_id,at:d.created_at?new Date(d.created_at).getTime():0};}
+async function refreshAdmin(){
+  isAdmin=false;
+  if(uid){var a=await sb.from('admins').select('user_id').eq('user_id',uid).maybeSingle();isAdmin=!!(a.data&&!a.error);}
+  if(isAdmin)$('admin').open=true;
+  $('authBtn').textContent=uid?(isAdmin?'Адмін · Вийти':'Вийти'):'Увійти';
+  renderAll();
+}
+async function authAction(){
+  if(!sb)return;
+  if(uid){var out=await sb.auth.signOut();if(out.error)toast(out.error.message);return;}
+  var email=prompt('Введіть свою електронну пошту. Ми надішлемо посилання для входу:');
+  if(!email)return;
+  var r=await sb.auth.signInWithOtp({email:email.trim()});
+  if(r.error)toast(r.error.message);else toast('Посилання для входу надіслано на пошту. Перевірте також папку «Спам».');
+}
+$('authBtn').addEventListener('click',authAction);
+async function init(){
+  if(!window.supabase||!window.supabase.createClient){showConn('Не завантажилась бібліотека Supabase.');renderAll();return;}
+  if(SUPABASE_URL.indexOf('https://')!==0||SUPABASE_ANON_KEY.indexOf('ВСТАВТЕ_')===0){showConn('Підключення налаштовано. Увійдіть через електронну пошту, щоб грати в мультиплеєрі.');renderAll();return;}
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},realtime:{params:{eventsPerSecond:10}}});
+  var sess=await sb.auth.getSession();session=sess.data.session;uid=session&&session.user?session.user.id:null;
+  await refreshAdmin();
+  sb.auth.onAuthStateChange(function(_event,s){session=s;uid=s&&s.user?s.user.id:null;Promise.resolve().then(async function(){await refreshAdmin();if(uid)loadMyTeam();else{myTeam=null;renderAll();}});});
+  showConn('Підключення до спільної гри…');
+  var e=await sb.from('event_state').select('*').eq('id',1).single();
+  if(e.error){onErr(e.error);return;} applyEvent(e.data);showConn('');
+  var m=await sb.from('members').select('user_id,team');
+  if(m.error){onErr(m.error);return;}members=new Map();m.data.forEach(function(x){if(TB[x.team])members.set(x.user_id,x.team);});myTeam=uid?(members.get(uid)||null):null;renderAll();
+  var p=await sb.from('pixels').select('*');
+  if(p.error){onErr(p.error);return;}pix.clear();p.data.forEach(function(x){var d=mapPixel(x);pix.set(x.x+'_'+x.y,d);});redrawAll();recount();renderAll();
+  sb.channel('pixel-battle-live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'event_state'},function(payload){applyEvent(payload.new);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'members'},function(payload){var x=payload.new||payload.old;if(payload.eventType==='DELETE')members.delete(x.user_id);else if(TB[x.team])members.set(x.user_id,x.team);myTeam=uid?(members.get(uid)||null):null;renderAll();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'pixels'},function(payload){var x=payload.new||payload.old,id=x.x+'_'+x.y;if(payload.eventType==='DELETE'){pix.delete(id);ctx.clearRect(x.x,x.y,1,1);}else{var d=mapPixel(x);pix.set(id,d);drawPix(d);}schedule();})
+    .subscribe(function(status){if(status==='SUBSCRIBED')showConn('');else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')showConn('Проблема з Realtime. Перевірте, чи ввімкнено Realtime для таблиць.');});
+}
+async function loadMyTeam(){if(!sb||!uid)return;var r=await sb.from('members').select('team').eq('user_id',uid).maybeSingle();myTeam=r.data?r.data.team:null;renderAll();}
+
+buildTeams();
+if(window.ResizeObserver) new ResizeObserver(layout).observe(view); else window.addEventListener('resize',layout);
+layout(); renderAll();
+setInterval(tick,500);
+init();
+})();
+</script>
+
+</body></html>
